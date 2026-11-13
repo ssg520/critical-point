@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>临界点 · 推免加分与 GPA 修复模拟器</title>
+<meta name="description" content="把成绩、加分、名额和竞争者录进来，实时算出综合分、名次和离名额线还差多少；拖动假设分数，先看刷分值不值。规则全部由你填写，示例为合成数据。">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23b8462c'/%3E%3Cpath d='M7 22a9 9 0 1 1 18 0' fill='none' stroke='%23fff6e8' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M16 22l5-6' stroke='%23fff6e8' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+
+<header class="top">
+  <div class="top-inner">
+    <a class="brand" href="./">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="26" height="26" fill="none">
+          <path d="M5.5 23a10.5 10.5 0 1 1 21 0" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M16 23l6-7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+          <circle cx="16" cy="23" r="1.9" fill="currentColor"/>
+          <path d="M8 12.5l1.6 1M16 8.5v2M24 12.5l-1.6 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="brand-text">
+        <strong>临界点</strong>
+        <small>推免加分 · GPA 修复模拟器</small>
+      </span>
+    </a>
+    <div class="top-actions">
+      <span class="save-state" id="saveState" role="status">示例数据 · 合成</span>
+      <button class="btn ghost" id="btnExport" type="button">导出 JSON</button>
+      <label class="btn ghost" for="importFile">导入 JSON</label>
+      <input id="importFile" type="file" accept="application/json,.json" hidden>
+      <button class="btn ghost danger" id="btnReset" type="button">重置示例</button>
+    </div>
+  </div>
+</header>
+
+<div class="notice" role="note">
+  <span class="notice-tag">先看这里</span>
+  <p>所有规则、权重、分值和竞争者都由你填写；页面里的示例是<strong>合成数据</strong>。本工具只做数学模拟，<strong>不代表任何学校</strong>的推免认定口径。</p>
+</div>
+
+<main class="page" id="main">
+  <section class="metrics" aria-label="关键指标">
+    <article class="metric">
+      <p class="metric-label">加权平均分 <span class="hint">计入学分 <b id="mCredits">—</b></span></p>
+      <p class="metric-value"><span id="mWavg">—</span><small>分</small></p>
+      <p class="metric-sub" id="mWavgSub">—</p>
+    </article>
+    <article class="metric">
+      <p class="metric-label">GPA <span class="hint" id="mScheme">—</span></p>
+      <p class="metric-value"><span id="mGpa">—</span><small id="mGpaUnit"></small></p>
+      <div class="meter" aria-hidden="true"><span id="mGpaBar"></span></div>
+      <p class="metric-sub" id="mGpaSub">—</p>
+    </article>
+    <article class="metric">
+      <p class="metric-label">综合分 <span class="hint" id="mWeights">—</span></p>
+      <p class="metric-value"><span id="mComposite">—</span><small>分</small></p>
+      <p class="metric-sub" id="mCompositeSub">—</p>
+    </article>
+  </section>
+
+  <section class="verdict" aria-label="名额临界">
+    <div class="verdict-grid">
+      <div class="verdict-main">
+        <p class="verdict-kicker">若今天结算</p>
+        <p class="verdict-rank">
+          <small class="rank-pre">第</small><span id="vRank">—</span>
+          <small> / <span id="vSize">—</span> 人 · 名额 <span id="vQuota">—</span></small>
+        </p>
+        <p class="verdict-line" id="vLine">—</p>
+      </div>
+      <div class="verdict-side">
+        <p class="verdict-gap" id="vGap">—</p>
+        <p class="verdict-gap-sub" id="vGapSub">—</p>
+      </div>
+    </div>
+    <div class="track" id="vTrack">
+      <div class="track-bar">
+        <span class="track-cut" id="vCut"><i>名额线</i></span>
+        <span class="track-me" id="vMe"><i>我</i></span>
+      </div>
+      <div class="track-scale">
+        <span id="vMin">—</span>
+        <span class="track-note">综合分</span>
+        <span id="vMax">—</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="workspace">
+    <div class="panel inputs">
+      <div class="tabs" role="tablist" aria-label="数据录入">
+        <button class="tab" role="tab" type="button" data-tab="course" aria-selected="true" aria-controls="pane-course" id="tab-course">课程成绩</button>
+        <button class="tab" role="tab" type="button" data-tab="bonus" aria-selected="false" aria-controls="pane-bonus" id="tab-bonus" tabindex="-1">加分项</button>
+        <button class="tab" role="tab" type="button" data-tab="cohort" aria-selected="false" aria-controls="pane-cohort" id="tab-cohort" tabindex="-1">竞争者</button>
+        <button class="tab" role="tab" type="button" data-tab="rules" aria-selected="false" aria-controls="pane-rules" id="tab-rules" tabindex="-1">规则口径</button>
+      </div>
+      <div class="pane" id="pane-course" role="tabpanel" aria-labelledby="tab-course" data-pane="course"></div>
+      <div class="pane" id="pane-bonus" role="tabpanel" aria-labelledby="tab-bonus" data-pane="bonus" hidden></div>
+      <div class="pane" id="pane-cohort" role="tabpanel" aria-labelledby="tab-cohort" data-pane="cohort" hidden></div>
+      <div class="pane" id="pane-rules" role="tabpanel" aria-labelledby="tab-rules" data-pane="rules" hidden></div>
+    </div>
+
+    <aside class="panel sandbox" aria-label="假设推演">
+      <div class="sandbox-head">
+        <h2>拖一拖，看差多少</h2>
+        <p>只做假设，不会改动你的成绩。</p>
+      </div>
+
+      <div class="chips" id="courseChips" role="group" aria-label="选择课程"></div>
+
+      <div class="slider-block">
+        <div class="slider-top">
+          <label for="scoreSlider" id="sliderCourseName">选一门课</label>
+          <output id="scoreOut" for="scoreSlider">—</output>
+        </div>
+        <input id="scoreSlider" type="range" min="0" max="100" step="1" value="85" aria-describedby="scoreOut">
+        <div class="slider-scale"><span>0</span><span>60</span><span>80</span><span>90</span><span>100</span></div>
+      </div>
+      <div class="delta-grid" id="scoreDeltas"></div>
+      <button class="btn solid small" id="applyScore" type="button">写入实际成绩</button>
+
+      <div class="sandbox-sub">
+        <div class="slider-top">
+          <label for="allSlider">全科统一提分</label>
+          <output id="allOut" for="allSlider">+0</output>
+        </div>
+        <input id="allSlider" type="range" min="0" max="20" step="1" value="0" aria-describedby="allOut">
+        <div class="delta-grid compact" id="allDeltas"></div>
+      </div>
+
+      <div class="solve" id="solveHints"></div>
+
+      <div class="sens">
+        <h3>再拿一个奖，能前进几名</h3>
+        <div class="table-wrap">
+          <table class="sens-table" id="sensTable"></table>
+        </div>
+        <p class="foot-note">奖项分值为示例，可在「加分项」里改。</p>
+      </div>
+
+      <div class="scenarios">
+        <div class="scen-head">
+          <h3>情景对比</h3>
+          <button class="btn ghost small" id="btnSaveScenario" type="button">保存当前</button>
+        </div>
+        <div class="table-wrap">
+          <table class="scen-table" id="scenTable"></table>
+        </div>
+      </div>
+    </aside>
+  </section>
+</main>
+
+<footer class="foot">
+  <p><strong>临界点</strong> v0.1 · 纯前端计算，数据只存在本机浏览器 · 规则与分值为用户自填示例 · 不构成任何官方认定</p>
+  <p class="foot-dim">计算内核与界面分离，单元测试覆盖分档、重修、上限、同分与反解；不读取任何校外数据。</p>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
